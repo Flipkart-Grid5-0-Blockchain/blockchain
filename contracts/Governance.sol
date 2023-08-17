@@ -11,7 +11,7 @@ contract Governance is Ownable {
         uint256 refferalCoins;
         uint256 reviewCoins;
         uint256 reedemedCoins;
-        mapping(address brands => uint256 coins) rewardCoins;
+        mapping(address => uint256) rewardCoins;
     }
 
     struct UserRewardData {
@@ -22,7 +22,7 @@ contract Governance is Ownable {
     struct Brand {
         uint256 totalCoinsPool;
         uint256 usedForServices;
-        mapping(address user => UserRewardData[]) userRewardData;
+        mapping(address => UserRewardData[]) userRewardData;
     }
 
     address private immutable i_tokenAddress;
@@ -31,8 +31,8 @@ contract Governance is Ownable {
     uint256 private reviewRewardRate = 50;
     uint256 private maxCoinsPossible = 1000;
 
-    mapping(address user => User obj) addressToUser;
-    mapping(address brand => Brand obj) addressToBrand;
+    mapping(address => User) addressToUser;
+    mapping(address => Brand) addressToBrand;
 
     error MORE_THAN_MAX_POSSIBLE_COINS();
     error REFFERED_USER_ITSELF();
