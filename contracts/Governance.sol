@@ -21,18 +21,19 @@ contract Governance is Ownable {
 
     struct Brand {
         uint256 totalCoinsPool;
-        uint256 usedForServices;
         mapping(address user => UserRewardData[]) userRewardData;
     }
 
     address private immutable i_tokenAddress;
-    uint256 private purchaseRewardRate = 100;
-    uint256 private refferalCoinsRewarded = 200;
-    uint256 private reviewRewardRate = 50;
-    uint256 private maxCoinsPossible = 1000;
+    uint256 public purchaseRewardRate = 100;
+    uint256 public refferalCoinsRewarded = 200;
+    // uint256 public reviewRewardRate = 50;
+    uint256 public maxCoinsPossible = 1000;
 
-    mapping(address user => User obj) addressToUser;
-    mapping(address brand => Brand obj) addressToBrand;
+    mapping(address => User) public addressToUser;
+    mapping(address => Brand) public addressToBrand;
+    mapping(address => bool) private registeredAddress;
+    mapping(address => bool) private registeredUsers;
 
     error MORE_THAN_MAX_POSSIBLE_COINS();
     error REFFERED_USER_ITSELF();
@@ -41,6 +42,8 @@ contract Governance is Ownable {
     error ZERO_ADDRESS_NOT_ALLOWED();
     error NOT_SUFFICIENT_COINS_TO_SEND();
     error NOT_SUFFICIENT_COINS_TO_BURN();
+    error USER_IS_NOT_REGISTERED();
+    error ADDRESS_IS_NOT_REGISTERED();
 
     event Tokens_Burned(uint256 amount);
     event Brand_Reward_Burned(uint256 amount);
@@ -86,14 +89,36 @@ contract Governance is Ownable {
         _;
     }
 
+    modifier isUserRegistered() {
+        if (registeredUsers[msg.sender] == false) {
+            revert USER_IS_NOT_REGISTERED();
+        }
+        _;
+    }
+
+    modifier isBrandAddressRegistered() {
+        if (registeredAddress[msg.sender] == false) {
+            revert ADDRESS_IS_NOT_REGISTERED();
+        }
+        _;
+    }
+
     constructor(address _tokenAddress) {
         i_tokenAddress = _tokenAddress;
+    }
+
+    function registerUser() external {
+        registeredUsers[msg.sender] = true;
+    }
+
+    function registerAddress() external {
+        registeredAddress[msg.sender] = true;
     }
 
     function purchaseItem(
         uint256 _purchaseAmount,
         address _brandAddress
-    ) external {
+    ) external isUserRegistered {
         uint256 coins = _purchaseAmount * purchaseRewardRate;
         if (coins > maxCoinsPossible) {
             coins = maxCoinsPossible;
@@ -111,7 +136,7 @@ contract Governance is Ownable {
 
     function refferalUser(
         address reffererAddress
-    ) external sameUser(reffererAddress) {
+    ) external sameUser(reffererAddress) isUserRegistered {
         //Update all the mappings
         User storage _user1 = addressToUser[reffererAddress];
         User storage _user2 = addressToUser[msg.sender];
@@ -146,9 +171,11 @@ contract Governance is Ownable {
 
     // redeem coins on purchase , review and refferal
 
+    /* Add a modfier for the brand check*/
+
     function redeemCoins(
         uint256 _coinsAmount
-    ) external greaterThanZero(_coinsAmount) {
+    ) external greaterThanZero(_coinsAmount) isUserRegistered {
         // User mapping would be updated and then that much tokens would be burned from user balance
         User storage _user = addressToUser[msg.sender];
         uint256 _availableCoins = _user.availableCoins;
@@ -164,7 +191,8 @@ contract Governance is Ownable {
     function redeemBrandReward(
         address _brandAddress,
         uint256 _coinsAmount
-    ) external greaterThanZero(_coinsAmount) {
+    ) external greaterThanZero(_coinsAmount) isUserRegistered {
+        //Check the available coins* that in the user mapping
         // Brand mapping would be updated and then that much tokens would be burned from user balance
         User storage _user = addressToUser[msg.sender];
         uint256 brandCoins = _user.rewardCoins[_brandAddress];
@@ -180,7 +208,7 @@ contract Governance is Ownable {
     function rewardUser(
         address _rewardingUser,
         uint256 _amount
-    ) external greaterThanZero(_amount) {
+    ) external greaterThanZero(_amount) isBrandAddressRegistered {
         // The Brand will give tokens to their loyal users on their own
         // We will update the rewards mapping in the users table as well as the rewards mapping in the brands struct
         // We will also update the totalRewardedCoins in the brands struct
@@ -196,17 +224,102 @@ contract Governance is Ownable {
         _user.rewardCoins[msg.sender] += _amount;
 
         /*Approve first in frontend using approve then call this */
-        IRewardToken(i_tokenAddress).transferFrom(msg.sender,_rewardingUser, _amount);
+        /*Approve function to be added so that user can call and not on */
+        IRewardToken(i_tokenAddress).transferFrom(
+            msg.sender,
+            _rewardingUser,
+            _amount
+        );
         emit Token_Rewarded(msg.sender, _rewardingUser, _amount);
     }
 
-    function expireTokens(uint256 _amount) external greaterThanZero(_amount) {
+    function expireTokens(
+        uint256 _brandCoins,
+        address[] memory _brands,
+        uint256[] memory _brandAmount,
+        uint256 _platformCoins
+    ) external {
         User storage _user = addressToUser[msg.sender];
-        if (_user.availableCoins < _amount) {
-            revert NOT_SUFFICIENT_COINS_TO_BURN();
+        /*check for array lengths to be same */
+        if (_brandCoins > 0) {
+            for (uint i = 0; i < _brands.length; i++) {
+                /*Addd validation checks for that no zero address is there */
+                if (_user.rewardCoins[_brands[i]] < _brandAmount[i]) {
+                    revert NOT_SUFFICIENT_COINS_TO_BURN();
+                }
+                _user.rewardCoins[_brands[i]] -= _brandAmount[i];
+            }
         }
-        _user.availableCoins -= _amount;
-        IRewardToken(i_tokenAddress).burn(_amount, msg.sender);
+        if (_platformCoins > 0) {
+            if (_user.availableCoins < _platformCoins) {
+                revert NOT_SUFFICIENT_COINS_TO_BURN();
+            }
+            _user.availableCoins -= _platformCoins;
+        }
+        IRewardToken(i_tokenAddress).burn(
+            _brandCoins + _platformCoins,
+            msg.sender
+        );
         emit Tokens_Expired();
     }
+
+    /*All getter functions 
+        struct User {
+        uint256 availableCoins;
+        uint256 purchaseCoins;
+        uint256 refferalCoins;
+        uint256 reviewCoins;
+        uint256 reedemedCoins;
+        mapping(address brands => uint256 coins) rewardCoins;
+    }
+
+    struct UserRewardData {
+        uint256 timestamp;
+        uint256 amount;
+    }
+
+    struct Brand {
+        uint256 totalCoinsPool;
+        uint256 usedForServices;
+        mapping(address user => UserRewardData[]) userRewardData;
+    }
+
+
+    mapping(address user => User obj) public addressToUser;
+    mapping(address brand => Brand obj) public addressToBrand;
+    mapping(address => bool) private registeredAddress;
+    mapping(address => bool) private registeredUsers;
+    */
+
+    function updatePurchaseReward(uint256 _updatedRate) external onlyOwner {
+        purchaseRewardRate = _updatedRate;
+    }
+
+    function updateRefferalReward(uint256 _updatedReward) external onlyOwner {
+        refferalCoinsRewarded = _updatedReward;
+    }
+
+    function updateMaxCoins(uint256 _updatedReward) external onlyOwner {
+        maxCoinsPossible = _updatedReward;
+    }
+
+    function getUserBrandCoins(
+        address user,
+        address brand
+    ) external view returns (uint256) {
+        User storage _user = addressToUser[user];
+        return _user.rewardCoins[brand];
+    }
+
+    function getBrandRewardData(
+        address brand
+    ) external view returns (UserRewardData[] memory) {
+        Brand storage _brand = addressToBrand[brand];
+        return _brand.userRewardData[msg.sender];
+    }
+
+    function getTokenAddress() external view onlyOwner returns (address) {
+        return i_tokenAddress;
+    }
 }
+ 
