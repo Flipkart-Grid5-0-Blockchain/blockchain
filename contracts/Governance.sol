@@ -33,7 +33,7 @@ contract Governance is Ownable {
     mapping(address => User) public addressToUser;
     mapping(address => Brand) public addressToBrand;
     mapping(address => bool) private registeredAddress;
-    mapping(address => bool) private registeredUsers;
+    mapping(address => string) private registeredUsers;
 
     error MORE_THAN_MAX_POSSIBLE_COINS();
     error REFFERED_USER_ITSELF();
@@ -90,7 +90,7 @@ contract Governance is Ownable {
     }
 
     modifier isUserRegistered() {
-        if (registeredUsers[msg.sender] == false) {
+        if (bytes(registeredUsers[msg.sender]).length == 0) {
             revert USER_IS_NOT_REGISTERED();
         }
         _;
@@ -107,8 +107,8 @@ contract Governance is Ownable {
         i_tokenAddress = _tokenAddress;
     }
 
-    function registerUser() external {
-        registeredUsers[msg.sender] = true;
+    function registerUser(string memory _email) external {
+        registeredUsers[msg.sender] = _email;
     }
 
     function registerAddress() external {
@@ -312,14 +312,14 @@ contract Governance is Ownable {
     }
 
     function getBrandRewardData(
-        address brand
+        address brand,
+        address user
     ) external view returns (UserRewardData[] memory) {
         Brand storage _brand = addressToBrand[brand];
-        return _brand.userRewardData[msg.sender];
+        return _brand.userRewardData[user];
     }
 
     function getTokenAddress() external view onlyOwner returns (address) {
         return i_tokenAddress;
     }
 }
- 
