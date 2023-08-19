@@ -1,23 +1,20 @@
-const {ethers, network, deployments} = require("hardhat");
+const { ethers } = require("hardhat");
 
 async function main() {
-  await deployments.fixture(["RewardToken","Governance"]);
+  const Governance = await ethers.getContract("Governance");
+  console.log("Governance Contract Address:", Governance.address);
 
-  const rewardToken = await deployments.get("RewardToken");
-  const contract = await ethers.getContractAt(
-       rewardToken.abi,
-       rewardToken.address
-     );
+  // Now you can interact with the Governance contract methods
+  // For example:
+  // const userBalance = await Governance.addressToUser(someUserAddress);
+  // console.log("User Balance:", userBalance);
 
-  const governance = await deployments.get("Governance");
- const tx = await contract.transferOwnership(governance.address);
- await tx.wait();
- console.log(await contract.owner());
+  // Make sure to provide actual method calls that interact with the contract
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
