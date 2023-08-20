@@ -2,13 +2,12 @@
 pragma solidity ^0.8.14;
 
 /// @title Governance Smart Contract
-/// @author Hackathon Team
+/// @author HackBots
 
 import "./Interfaces/IRewardToken.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Governance is Ownable {
-
     //Type Declarations
     /// @dev Struct to represent a user's data.
     struct User {
@@ -36,10 +35,10 @@ contract Governance is Ownable {
     address private immutable i_tokenAddress;
 
     // Reward rates and limits.
-    uint256 public purchaseRewardRate = 100;
-    uint256 public refferalCoinsRewarded = 200;
+    uint256 public purchaseRewardRate = 2;
+    uint256 public refferalCoinsRewarded = 100;
     // uint256 public reviewRewardRate = 50;
-    uint256 public maxCoinsPossible = 1000;
+    uint256 public maxCoinsPossible = 200;
 
     // Reward rates and limits.
     mapping(address => User) public addressToUser;
@@ -68,7 +67,7 @@ contract Governance is Ownable {
     /// @param amount The amount of brand reward tokens burned.
     event Brand_Reward_Burned(uint256 amount);
 
-     /// @dev Emitted when tokens expire.
+    /// @dev Emitted when tokens expire.
     event Tokens_Expired();
 
     /// @dev Emitted when tokens are rewarded to a user by a brand.
@@ -122,7 +121,7 @@ contract Governance is Ownable {
         _;
     }
 
-     /// @dev Modifier to ensure that a value is greater than zero.
+    /// @dev Modifier to ensure that a value is greater than zero.
     modifier greaterThanZero(uint256 _amount) {
         if (_amount == 0) {
             revert AMOUNT_MUST_BE_GREATER_THAN_ZERO();
@@ -146,12 +145,18 @@ contract Governance is Ownable {
         _;
     }
 
-    //Functions
+    /*-------------Functions---------------*/
 
     /// @dev Constructor to initialize the token address.
     constructor(address _tokenAddress) {
         i_tokenAddress = _tokenAddress;
     }
+
+    // * receive function
+    receive() external payable {}
+
+    // * fallback function
+    fallback() external payable {}
 
     /// @dev Registers a user with their email address.
     /// @param _email The email address of the user.
@@ -171,7 +176,7 @@ contract Governance is Ownable {
         uint256 _purchaseAmount,
         address _brandAddress
     ) external isUserRegistered {
-        uint256 coins = _purchaseAmount * purchaseRewardRate;
+        uint256 coins = (_purchaseAmount * purchaseRewardRate) / 100;
         if (coins > maxCoinsPossible) {
             coins = maxCoinsPossible;
         }
@@ -181,8 +186,8 @@ contract Governance is Ownable {
         _user.availableCoins += coins;
         Brand storage brand = addressToBrand[_brandAddress];
         brand.totalCoinsPool += coins;
-        IRewardToken(i_tokenAddress).mint(coins, msg.sender);
-        IRewardToken(i_tokenAddress).mint(coins, _brandAddress);
+        IRewardToken(i_tokenAddress).mint(coins * 10 ** 18, msg.sender);
+        IRewardToken(i_tokenAddress).mint(coins * 5 ** 18, _brandAddress);
         emit Purchase_Coins_Received(msg.sender, _brandAddress, coins);
     }
 
@@ -200,10 +205,13 @@ contract Governance is Ownable {
         _user2.refferalCoins += refferalCoinsRewarded;
         _user2.availableCoins += refferalCoinsRewarded;
         IRewardToken(i_tokenAddress).mint(
-            refferalCoinsRewarded,
+            refferalCoinsRewarded * 10 ** 18,
             reffererAddress
         );
-        IRewardToken(i_tokenAddress).mint(refferalCoinsRewarded, msg.sender);
+        IRewardToken(i_tokenAddress).mint(
+            refferalCoinsRewarded * 10 ** 18,
+            msg.sender
+        );
         // then mint for the user as well as refree
         emit Refferal_Coins_Received(
             reffererAddress,
@@ -215,6 +223,7 @@ contract Governance is Ownable {
     /// @dev Awards coins to a user for reviewing an item.
     /// @param _amount The amount of coins to award.
     /// @param _userToPay The user to award the coins to.
+
     function reviewItem(
         uint256 _amount,
         address _userToPay
@@ -223,7 +232,7 @@ contract Governance is Ownable {
         User storage _user = addressToUser[_userToPay];
         _user.reviewCoins += _amount;
         _user.availableCoins += _amount;
-        IRewardToken(i_tokenAddress).mint(_amount, _userToPay);
+        IRewardToken(i_tokenAddress).mint(_amount * 10 ** 18, _userToPay);
         emit Review_Award_Transferred();
     }
 
@@ -244,7 +253,7 @@ contract Governance is Ownable {
         }
         _user.availableCoins -= _coinsAmount;
         _user.reedemedCoins += _coinsAmount;
-        IRewardToken(i_tokenAddress).burn(_coinsAmount, msg.sender);
+        IRewardToken(i_tokenAddress).burn(_coinsAmount * 10 ** 18, msg.sender);
         emit Tokens_Burned(_coinsAmount);
     }
 
@@ -264,7 +273,7 @@ contract Governance is Ownable {
         }
         _user.rewardCoins[_brandAddress] -= _coinsAmount;
         _user.reedemedCoins += _coinsAmount;
-        IRewardToken(i_tokenAddress).burn(_coinsAmount, msg.sender);
+        IRewardToken(i_tokenAddress).burn(_coinsAmount * 10 ** 18, msg.sender);
         emit Brand_Reward_Burned(_coinsAmount);
     }
 
@@ -294,7 +303,7 @@ contract Governance is Ownable {
         IRewardToken(i_tokenAddress).transferFrom(
             msg.sender,
             _rewardingUser,
-            _amount
+            _amount * 10 ** 18
         );
         emit Token_Rewarded(msg.sender, _rewardingUser, _amount);
     }
@@ -328,7 +337,7 @@ contract Governance is Ownable {
             _user.availableCoins -= _platformCoins;
         }
         IRewardToken(i_tokenAddress).burn(
-            _brandCoins + _platformCoins,
+            (_brandCoins + _platformCoins) * 10 ** 18,
             msg.sender
         );
         emit Tokens_Expired();
@@ -351,34 +360,6 @@ contract Governance is Ownable {
     function updateMaxCoins(uint256 _updatedReward) external onlyOwner {
         maxCoinsPossible = _updatedReward;
     }
-
-    /*All getter functions 
-        struct User {
-        uint256 availableCoins;
-        uint256 purchaseCoins;
-        uint256 refferalCoins;
-        uint256 reviewCoins;
-        uint256 reedemedCoins;
-        mapping(address brands => uint256 coins) rewardCoins;
-    }
-
-    struct UserRewardData {
-        uint256 timestamp;
-        uint256 amount;
-    }
-
-    struct Brand {
-        uint256 totalCoinsPool;
-        uint256 usedForServices;
-        mapping(address user => UserRewardData[]) userRewardData;
-    }
-
-
-    mapping(address user => User obj) public addressToUser;
-    mapping(address brand => Brand obj) public addressToBrand;
-    mapping(address => bool) private registeredAddress;
-    mapping(address => bool) private registeredUsers;
-    */
 
     /// @dev Retrieves the brand coins earned by a user for a specific brand.
     /// @param user The user's address.
@@ -409,10 +390,4 @@ contract Governance is Ownable {
     function getTokenAddress() external view onlyOwner returns (address) {
         return i_tokenAddress;
     }
-
-    // * receive function
-    receive() external payable {}
-
-    // * fallback function
-    fallback() external payable {}
 }
