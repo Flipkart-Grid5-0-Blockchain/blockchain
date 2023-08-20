@@ -1,10 +1,16 @@
-//SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.14;
+
+/// @title Governance Smart Contract
+/// @author Hackathon Team
 
 import "./Interfaces/IRewardToken.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Governance is Ownable {
+
+    //Type Declarations
+    /// @dev Struct to represent a user's data.
     struct User {
         uint256 availableCoins;
         uint256 purchaseCoins;
@@ -14,27 +20,34 @@ contract Governance is Ownable {
         mapping(address brands => uint256 coins) rewardCoins;
     }
 
+    /// @dev Struct to represent a user's reward data.
     struct UserRewardData {
         uint256 timestamp;
         uint256 amount;
     }
 
+    /// @dev Struct to represent a brand's data.
     struct Brand {
         uint256 totalCoinsPool;
         mapping(address user => UserRewardData[]) userRewardData;
     }
 
+    // Immutable variable for the token address.
     address private immutable i_tokenAddress;
+
+    // Reward rates and limits.
     uint256 public purchaseRewardRate = 100;
     uint256 public refferalCoinsRewarded = 200;
     // uint256 public reviewRewardRate = 50;
     uint256 public maxCoinsPossible = 1000;
 
+    // Reward rates and limits.
     mapping(address => User) public addressToUser;
     mapping(address => Brand) public addressToBrand;
     mapping(address => bool) private registeredAddress;
     mapping(address => string) private registeredUsers;
 
+    // Errors
     error MORE_THAN_MAX_POSSIBLE_COINS();
     error REFFERED_USER_ITSELF();
     error AMOUNT_MUST_BE_GREATER_THAN_ZERO();
@@ -45,29 +58,55 @@ contract Governance is Ownable {
     error USER_IS_NOT_REGISTERED();
     error ADDRESS_IS_NOT_REGISTERED();
 
+    // Events
+
+    /// @dev Emitted when tokens are burned.
+    /// @param amount The amount of tokens burned.
     event Tokens_Burned(uint256 amount);
+
+    /// @dev Emitted when brand reward tokens are burned.
+    /// @param amount The amount of brand reward tokens burned.
     event Brand_Reward_Burned(uint256 amount);
+
+     /// @dev Emitted when tokens expire.
     event Tokens_Expired();
+
+    /// @dev Emitted when tokens are rewarded to a user by a brand.
+    /// @param brand The address of the brand rewarding the tokens.
+    /// @param user The address of the user receiving the tokens.
+    /// @param amount The amount of tokens rewarded.
     event Token_Rewarded(
         address indexed brand,
         address indexed user,
         uint256 indexed amount
     );
 
+    /// @dev Emitted when purchase coins are received by a user from a brand.
+    /// @param user The address of the user.
+    /// @param brand The address of the brand.
+    /// @param coins The amount of purchase coins received.
     event Purchase_Coins_Received(
         address indexed user,
         address indexed brand,
         uint256 indexed coins
     );
 
+    /// @dev Emitted when referral coins are received by a referred user from a referrer.
+    /// @param personRefferedBy The address of the person who referred.
+    /// @param personReffered The address of the person being referred.
+    /// @param coins The amount of referral coins received.
     event Refferal_Coins_Received(
         address indexed personRefferedBy,
         address indexed personReffered,
         uint256 indexed coins
     );
 
+    /// @dev Emitted when a review award is transferred to a user.
     event Review_Award_Transferred();
 
+    // Modifiers
+
+    /// @dev Modifier to ensure that the user is not referring themselves.
     modifier sameUser(address _userAddress) {
         if (msg.sender == _userAddress) {
             revert REFFERED_USER_ITSELF();
@@ -75,6 +114,7 @@ contract Governance is Ownable {
         _;
     }
 
+    /// @dev Modifier to ensure that an address is not the zero address.
     modifier notZeroAddress(address _address) {
         if (_address == address(0)) {
             revert ZERO_ADDRESS_NOT_ALLOWED();
@@ -82,6 +122,7 @@ contract Governance is Ownable {
         _;
     }
 
+     /// @dev Modifier to ensure that a value is greater than zero.
     modifier greaterThanZero(uint256 _amount) {
         if (_amount == 0) {
             revert AMOUNT_MUST_BE_GREATER_THAN_ZERO();
@@ -89,6 +130,7 @@ contract Governance is Ownable {
         _;
     }
 
+    /// @dev Modifier to ensure that a user is registered.
     modifier isUserRegistered() {
         if (bytes(registeredUsers[msg.sender]).length == 0) {
             revert USER_IS_NOT_REGISTERED();
@@ -96,6 +138,7 @@ contract Governance is Ownable {
         _;
     }
 
+    /// @dev Modifier to ensure that a brand address is registered.
     modifier isBrandAddressRegistered() {
         if (registeredAddress[msg.sender] == false) {
             revert ADDRESS_IS_NOT_REGISTERED();
@@ -103,18 +146,27 @@ contract Governance is Ownable {
         _;
     }
 
+    //Functions
+
+    /// @dev Constructor to initialize the token address.
     constructor(address _tokenAddress) {
         i_tokenAddress = _tokenAddress;
     }
 
+    /// @dev Registers a user with their email address.
+    /// @param _email The email address of the user.
     function registerUser(string memory _email) external {
         registeredUsers[msg.sender] = _email;
     }
 
+    /// @dev Registers an address as a brand.
     function registerAddress() external {
         registeredAddress[msg.sender] = true;
     }
 
+    /// @dev Allows users to purchase items from a brand and earn reward coins.
+    /// @param _purchaseAmount The purchase amount.
+    /// @param _brandAddress The address of the brand.
     function purchaseItem(
         uint256 _purchaseAmount,
         address _brandAddress
@@ -133,6 +185,9 @@ contract Governance is Ownable {
         IRewardToken(i_tokenAddress).mint(coins, _brandAddress);
         emit Purchase_Coins_Received(msg.sender, _brandAddress, coins);
     }
+
+    /// @dev Refers a new user and rewards both the referrer and the referred user.
+    /// @param reffererAddress The address of the referrer.
 
     function refferalUser(
         address reffererAddress
@@ -157,6 +212,9 @@ contract Governance is Ownable {
         );
     }
 
+    /// @dev Awards coins to a user for reviewing an item.
+    /// @param _amount The amount of coins to award.
+    /// @param _userToPay The user to award the coins to.
     function reviewItem(
         uint256 _amount,
         address _userToPay
@@ -173,6 +231,8 @@ contract Governance is Ownable {
 
     /* Add a modfier for the brand check*/
 
+    /// @dev Redeems coins earned through purchases, referrals, or rewards.
+    /// @param _coinsAmount The amount of coins to redeem.
     function redeemCoins(
         uint256 _coinsAmount
     ) external greaterThanZero(_coinsAmount) isUserRegistered {
@@ -188,6 +248,9 @@ contract Governance is Ownable {
         emit Tokens_Burned(_coinsAmount);
     }
 
+    /// @dev Redeems brand reward coins earned by the user.
+    /// @param _brandAddress The address of the brand.
+    /// @param _coinsAmount The amount of coins to redeem.
     function redeemBrandReward(
         address _brandAddress,
         uint256 _coinsAmount
@@ -205,10 +268,13 @@ contract Governance is Ownable {
         emit Brand_Reward_Burned(_coinsAmount);
     }
 
+    /// @dev Rewards a user with tokens from a brand's reward pool.
+    /// @param _rewardingUser The user rewarding the tokens.
+    /// @param _amount The amount of tokens to reward.
     function rewardUser(
         address _rewardingUser,
         uint256 _amount
-    ) external greaterThanZero(_amount) isBrandAddressRegistered {
+    ) external greaterThanZero(_amount) {
         // The Brand will give tokens to their loyal users on their own
         // We will update the rewards mapping in the users table as well as the rewards mapping in the brands struct
         // We will also update the totalRewardedCoins in the brands struct
@@ -233,6 +299,11 @@ contract Governance is Ownable {
         emit Token_Rewarded(msg.sender, _rewardingUser, _amount);
     }
 
+    /// @dev Expires unused tokens, both from brand coins and platform coins.
+    /// @param _brandCoins The amount of brand coins to expire.
+    /// @param _brands An array of brand addresses.
+    /// @param _brandAmount An array of brand coin amounts.
+    /// @param _platformCoins The amount of platform coins to expire.
     function expireTokens(
         uint256 _brandCoins,
         address[] memory _brands,
@@ -263,6 +334,24 @@ contract Governance is Ownable {
         emit Tokens_Expired();
     }
 
+    /// @dev Updates the reward rate for purchases.
+    /// @param _updatedRate The new reward rate.
+    function updatePurchaseReward(uint256 _updatedRate) external onlyOwner {
+        purchaseRewardRate = _updatedRate;
+    }
+
+    /// @dev Updates the reward amount for referrals.
+    /// @param _updatedReward The new reward amount.
+    function updateRefferalReward(uint256 _updatedReward) external onlyOwner {
+        refferalCoinsRewarded = _updatedReward;
+    }
+
+    /// @dev Updates the maximum possible coins.
+    /// @param _updatedReward The new maximum possible coins.
+    function updateMaxCoins(uint256 _updatedReward) external onlyOwner {
+        maxCoinsPossible = _updatedReward;
+    }
+
     /*All getter functions 
         struct User {
         uint256 availableCoins;
@@ -291,18 +380,10 @@ contract Governance is Ownable {
     mapping(address => bool) private registeredUsers;
     */
 
-    function updatePurchaseReward(uint256 _updatedRate) external onlyOwner {
-        purchaseRewardRate = _updatedRate;
-    }
-
-    function updateRefferalReward(uint256 _updatedReward) external onlyOwner {
-        refferalCoinsRewarded = _updatedReward;
-    }
-
-    function updateMaxCoins(uint256 _updatedReward) external onlyOwner {
-        maxCoinsPossible = _updatedReward;
-    }
-
+    /// @dev Retrieves the brand coins earned by a user for a specific brand.
+    /// @param user The user's address.
+    /// @param brand The brand's address.
+    /// @return The amount of brand coins.
     function getUserBrandCoins(
         address user,
         address brand
@@ -311,6 +392,10 @@ contract Governance is Ownable {
         return _user.rewardCoins[brand];
     }
 
+    /// @dev Retrieves the reward data for a specific user from a specific brand.
+    /// @param brand The brand's address.
+    /// @param user The user's address.
+    /// @return An array of UserRewardData structs representing the reward data.
     function getBrandRewardData(
         address brand,
         address user
@@ -319,7 +404,15 @@ contract Governance is Ownable {
         return _brand.userRewardData[user];
     }
 
+    /// @dev Retrieves the address of the token used in the contract.
+    /// @return The token address.
     function getTokenAddress() external view onlyOwner returns (address) {
         return i_tokenAddress;
     }
+
+    // * receive function
+    receive() external payable {}
+
+    // * fallback function
+    fallback() external payable {}
 }
